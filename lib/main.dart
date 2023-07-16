@@ -1,232 +1,235 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_blue/flutter_blue.dart';
-import 'dart:async' show StreamSubscription;
 
 void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
+  bool _switchValue = true;
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Bluetooth Example',
       theme: ThemeData(
+        fontFamily: 'Poppins',
         primarySwatch: Colors.blue,
       ),
-      home: BluetoothHomePage(),
-    );
-  }
-}
-
-class BluetoothHomePage extends StatefulWidget {
-  @override
-  _BluetoothHomePageState createState() => _BluetoothHomePageState();
-}
-
-class _BluetoothHomePageState extends State<BluetoothHomePage> {
-  BluetoothState _bluetoothState = BluetoothState.unknown;
-  List<ScanResult> _devicesList = [];
-
-  @override
-  void initState() {
-    super.initState();
-    FlutterBlue.instance.state.listen((state) {
-      setState(() {
-        _bluetoothState = state;
-      });
-    });
-  }
-
-  void _startDiscovery() {
-    FlutterBlue.instance.startScan(timeout: Duration(seconds: 4));
-
-    FlutterBlue.instance.scanResults.listen((results) {
-      setState(() {
-        _devicesList = results;
-      });
-    });
-  }
-
-  void _connectToDevice(BluetoothDevice device) async {
-    // Perform connection logic here
-    await device.connect();
-    // Navigate to the DataTransferPage
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DataTransferPage(device: device),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Bluetooth Example'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'Bluetooth Status:',
-              style: TextStyle(fontSize: 24),
-            ),
-            Text(
-              _bluetoothState.toString(),
-              style: TextStyle(fontSize: 20),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              child: Text(
-                'Scan for Devices',
-                style: TextStyle(fontSize: 18),
-              ),
-              onPressed: _startDiscovery,
-            ),
-            SizedBox(height: 20),
-            Text(
-              'Available Devices:',
-              style: TextStyle(fontSize: 24),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _devicesList.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final device = _devicesList[index].device;
-                  return ListTile(
-                    title: Text(device.name),
-                    subtitle: Text(device.id.toString()),
-                    trailing: ElevatedButton(
-                      child: Text(
-                        'Connect',
-                        style: TextStyle(fontSize: 16),
+      home: Scaffold(
+        backgroundColor: const Color.fromRGBO(241, 244, 248, 1),
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 22, top: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(radius: 28),
+                    SizedBox(height: 14),
+                    Text(
+                      'Good Morning',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 26,
                       ),
-                      onPressed: () {
-                        _connectToDevice(device);
-                      },
                     ),
-                  );
-                },
+                    SizedBox(height: 10),
+                    Text(
+                      'Pawan 👋',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color.fromRGBO(76, 58, 239, 1),
+                        fontSize: 26,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class DataTransferPage extends StatefulWidget {
-  final BluetoothDevice device;
-
-  DataTransferPage({required this.device});
-
-  @override
-  _DataTransferPageState createState() => _DataTransferPageState();
-}
-
-class _DataTransferPageState extends State<DataTransferPage> {
-  List<String> _messageList = [];
-  TextEditingController _textEditingController = TextEditingController();
-
-  BluetoothCharacteristic? _characteristic;
-  BluetoothCharacteristic? characteristic_1;
-  bool _isConnected = false;
-  StreamSubscription<List<int>>? _streamSubscription;
-  @override
-  void initState() {
-    super.initState();
-    _connectToDevice();
-  }
-
-  void _connectToDevice() async {
-    List<BluetoothService> services = await widget.device.discoverServices();
-    services.forEach((service) {
-      service.characteristics.forEach((characteristic) {
-        if (characteristic.properties.write || characteristic.properties.writeWithoutResponse) {
-          _characteristic = characteristic;
-        }
-        if (characteristic.properties.notify) {
-          characteristic_1 = characteristic;
-        }
-      });
-    });
-    setState(() {
-      _isConnected = true;
-    });
-  }
-
-  void _sendMessage() async {
-    if (_textEditingController.text.isNotEmpty && _characteristic != null) {
-      await _characteristic!.write(_textEditingController.text.codeUnits);
-      setState(() {
-        _messageList.add('Sent: ${_textEditingController.text}');
-        _textEditingController.clear();
-      });
-    }
-  }
-  void _startListeningToNotifications() async {
-    if (characteristic_1 != null) {
-      await characteristic_1!.setNotifyValue(true);
-      _streamSubscription = characteristic_1!.value.listen((value) {
-        final message = String.fromCharCodes(value);
-        setState(() {
-          _messageList.add('Received: $message');
-        });
-      });
-    }
-  }
-  void _receiveMessage() {
-    // Perform logic to receive data from the device
-    // You can update the _messageList with received data
-    _startListeningToNotifications();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Data Transfer'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _messageList.length,
-              itemBuilder: (BuildContext context, int index) {
-                return ListTile(
-                  title: Text(_messageList[index]),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textEditingController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter message',
-                    ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey.shade400)),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 22, right: 10, top: 15),
+                  child: Column(
+                    children: [
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Scan Bluetooth Devices",
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w500),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.only(right: 10.0),
+                            child: Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Turn bluetooth on/off',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                          Switch(
+                            value: _switchValue,
+                            onChanged: (value) {
+                              _switchValue = value;
+                            },
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                          onPressed: () {},
+                          child: Text('Scan',
+                              style: TextStyle(color: Colors.grey.shade600)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey.shade100,
+                              minimumSize: const Size(100, 30),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22),
+                              ))),
+                    ],
                   ),
                 ),
-                SizedBox(width: 8.0),
-                ElevatedButton(
-                  onPressed: _sendMessage,
-                  child: Text('Send Data'),
+              ),
+              Container(
+                margin: const EdgeInsets.only(
+                  left: 22,
+                  right: 22,
                 ),
-                SizedBox(width: 8.0),
-                ElevatedButton(
-                  onPressed: _receiveMessage,
-                  child: Text('Receive Data'),
+                child: Column(
+                  children: [
+                    Container(
+                        child: Container(
+                      margin: EdgeInsets.only(top: 10),
+                      width: MediaQuery.of(context).size.width,
+                      height: 100,
+                      decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          color: Color.fromRGBO(57, 210, 192, 1)),
+                      child: const Row(children: [
+                        SizedBox(width: 20),
+                        Icon(
+                          Icons.bluetooth_connected,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                        SizedBox(
+                          width: 10,
+                        ),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Connected Device',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Pawan\'s iPhone',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ]),
+                    )),
+                    Container(
+                        margin: EdgeInsets.only(top: 10),
+                        child: Container(
+                          width: MediaQuery.of(context).size.width,
+                          height: 100,
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(15),
+                              color: Color.fromRGBO(75, 57, 239, 1)),
+                          child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.chrome_reader_mode_rounded,
+                                        color: Colors.white,
+                                        size: 25,
+                                      ),
+                                      SizedBox(height: 10),
+                                      Text('Read Batch Code',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600))
+                                    ]),
+                                Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.edit,
+                                        color: Colors.white,
+                                        size: 25,
+                                      ),
+                                      SizedBox(height: 10),
+                                      Text('Set Batch Code',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w400))
+                                    ]),
+                              ]),
+                        )),
+                    Container(
+                        margin: EdgeInsets.only(top: 10),
+                        child: Container(
+                          width: MediaQuery.of(context).size.width,
+                          height: 100,
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(15),
+                              color: Color.fromRGBO(251, 175, 124, 1)),
+                          child: const Row(children: [
+                            SizedBox(width: 20),
+                            Icon(
+                              Icons.contact_mail_rounded,
+                              color: Colors.white,
+                              size: 40,
+                            ),
+                            SizedBox(
+                              width: 15,
+                            ),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Start Test',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ]),
+                        )),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
