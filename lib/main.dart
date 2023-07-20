@@ -1,232 +1,556 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_blue/flutter_blue.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async' show StreamSubscription;
+import 'package:carousel_slider/carousel_slider.dart';
 
-void main() => runApp(MyApp());
+void main() => runApp(MaterialApp(home: MyApp()));
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
+  BluetoothDevice? device;
+
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Bluetooth Example',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: BluetoothHomePage(),
-    );
-  }
+  _MyAppState createState() => _MyAppState();
 }
 
-class BluetoothHomePage extends StatefulWidget {
-  @override
-  _BluetoothHomePageState createState() => _BluetoothHomePageState();
-}
-
-class _BluetoothHomePageState extends State<BluetoothHomePage> {
-  BluetoothState _bluetoothState = BluetoothState.unknown;
+class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
   List<ScanResult> _devicesList = [];
+  ScanResult? selectedDevice;
+  List<ScanResult> filteredDevices = [];
 
-  @override
-  void initState() {
-    super.initState();
-    FlutterBlue.instance.state.listen((state) {
-      setState(() {
-        _bluetoothState = state;
-      });
-    });
-  }
+  AnimationController? _animationController;
+  Animation<Color?>? _colorAnimation;
 
-  void _startDiscovery() {
-    FlutterBlue.instance.startScan(timeout: Duration(seconds: 4));
-
-    FlutterBlue.instance.scanResults.listen((results) {
-      setState(() {
-        _devicesList = results;
-      });
-    });
-  }
-
-  void _connectToDevice(BluetoothDevice device) async {
-    // Perform connection logic here
-    await device.connect();
-    // Navigate to the DataTransferPage
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DataTransferPage(device: device),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Bluetooth Example'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'Bluetooth Status:',
-              style: TextStyle(fontSize: 24),
-            ),
-            Text(
-              _bluetoothState.toString(),
-              style: TextStyle(fontSize: 20),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              child: Text(
-                'Scan for Devices',
-                style: TextStyle(fontSize: 18),
-              ),
-              onPressed: _startDiscovery,
-            ),
-            SizedBox(height: 20),
-            Text(
-              'Available Devices:',
-              style: TextStyle(fontSize: 24),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _devicesList.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final device = _devicesList[index].device;
-                  return ListTile(
-                    title: Text(device.name),
-                    subtitle: Text(device.id.toString()),
-                    trailing: ElevatedButton(
-                      child: Text(
-                        'Connect',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      onPressed: () {
-                        _connectToDevice(device);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class DataTransferPage extends StatefulWidget {
-  final BluetoothDevice device;
-
-  DataTransferPage({required this.device});
-
-  @override
-  _DataTransferPageState createState() => _DataTransferPageState();
-}
-
-class _DataTransferPageState extends State<DataTransferPage> {
-  List<String> _messageList = [];
-  TextEditingController _textEditingController = TextEditingController();
-
+  bool _switchValue = true;
+  String connected_device = "";
+  BluetoothDevice? device_1;
   BluetoothCharacteristic? _characteristic;
   BluetoothCharacteristic? characteristic_1;
-  bool _isConnected = false;
   StreamSubscription<List<int>>? _streamSubscription;
+  String received_message = "";
+
   @override
   void initState() {
     super.initState();
-    _connectToDevice();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+    _colorAnimation = ColorTween(
+      begin: Colors.grey,
+      end: Colors.blue,
+    ).animate(_animationController!);
   }
 
-  void _connectToDevice() async {
-    List<BluetoothService> services = await widget.device.discoverServices();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (device_1 != null) {
+      WidgetsBinding.instance!.addPostFrameCallback((_) {
+        _startListeningToNotificationsAfterDelay();
+      });
+    }
+  }
+
+  void _startListeningToNotificationsAfterDelay() async {
+    await Future.delayed(const Duration(milliseconds: 1000));
+    _startListeningToNotifications();
+  }
+
+  void showPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Center(child: Text('Received Message')),
+          content: Text(received_message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the popup
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _makeConnection() async {
+    List<BluetoothService> services = await device_1!.discoverServices();
     services.forEach((service) {
       service.characteristics.forEach((characteristic) {
-        if (characteristic.properties.write || characteristic.properties.writeWithoutResponse) {
+        if (characteristic.properties.write ||
+            characteristic.properties.writeWithoutResponse) {
           _characteristic = characteristic;
         }
+      });
+    });
+  }
+
+  void _receiveMessage() async {
+    List<BluetoothService> services = await device_1!.discoverServices();
+    services.forEach((service) {
+      service.characteristics.forEach((characteristic) {
         if (characteristic.properties.notify) {
           characteristic_1 = characteristic;
         }
       });
     });
-    setState(() {
-      _isConnected = true;
-    });
   }
 
-  void _sendMessage() async {
-    if (_textEditingController.text.isNotEmpty && _characteristic != null) {
-      await _characteristic!.write(_textEditingController.text.codeUnits);
-      setState(() {
-        _messageList.add('Sent: ${_textEditingController.text}');
-        _textEditingController.clear();
-      });
+  void _sendMessage(String command) async {
+    if (_characteristic != null) {
+      await _characteristic!.write(command.codeUnits);
     }
   }
+
   void _startListeningToNotifications() async {
     if (characteristic_1 != null) {
       await characteristic_1!.setNotifyValue(true);
       _streamSubscription = characteristic_1!.value.listen((value) {
         final message = String.fromCharCodes(value);
         setState(() {
-          _messageList.add('Received: $message');
+          received_message = message;
+          print(message);
         });
+        if (message != "") {
+          showPopup(context);
+        }
       });
     }
   }
-  void _receiveMessage() {
-    // Perform logic to receive data from the device
-    // You can update the _messageList with received data
-    _startListeningToNotifications();
+
+  void _connectToDevice(BluetoothDevice device) async {
+    // Perform connection logic here
+    device_1 = device;
+    await device.connect();
+
+    if (device != null) {
+      setState(() {
+        connected_device = device!.name ?? "unknown";
+      });
+      _makeConnection();
+      _receiveMessage();
+      _startListeningToNotificationsAfterDelay();
+    }
+  }
+
+  void _startDiscovery() {
+    FlutterBluePlus.instance.startScan(timeout: const Duration(seconds: 2));
+
+    FlutterBluePlus.instance.scanResults.listen((results) {
+      setState(() {
+        _devicesList = results;
+      });
+
+      setState(() {
+        filteredDevices = _devicesList
+            .where((result) => result.device.name.isNotEmpty)
+            .toList();
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Data Transfer'),
+    return MaterialApp(
+      title: 'Bluetooth Example',
+      theme: ThemeData(
+        fontFamily: 'Poppins',
+        primarySwatch: Colors.blue,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _messageList.length,
-              itemBuilder: (BuildContext context, int index) {
-                return ListTile(
-                  title: Text(_messageList[index]),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textEditingController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter message',
+      home: Scaffold(
+        backgroundColor: const Color.fromRGBO(241, 244, 248, 1),
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(left: 22, right: 22, top: 7),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height / 7,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    color: Colors.blue.shade100,
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Greetings Of The Day',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 24,
+                            ),
+                          ),
+                          Text(
+                            'Pawan 👋',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color.fromRGBO(76, 58, 239, 1),
+                              fontSize: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                      CircleAvatar(radius: 24),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              //image slider
+              CarouselSlider(
+                items: [
+                  Container(
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/1.jpg'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/2.jpg'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/3.jpg'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/4.jpg'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ],
+                options: CarouselOptions(
+                  height: MediaQuery.of(context).size.height / 5,
+                  autoPlay: true,
+                  viewportFraction: 0.9,
+                  autoPlayInterval: const Duration(seconds: 3),
+                  autoPlayAnimationDuration: const Duration(milliseconds: 900),
+                  autoPlayCurve: Curves.fastOutSlowIn,
+                  pauseAutoPlayOnTouch: true,
+                  onPageChanged: (index, reason) {
+                    setState(() {});
+                  },
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.only(left: 22, right: 22),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height / 7,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    color: const Color.fromRGBO(188, 204, 154, 1),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 22, right: 10, top: 8),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Turn bluetooth on/off',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Switch(
+                              value: true,
+                              onChanged: (value) {
+                                setState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // AnimatedBuilder(
+                            //   animation: _animationController!,
+                            //   builder: (BuildContext context, Widget? child) {
+                            //     final color = _colorAnimation!.value!;
+                            //     return Icon(
+                            //       Icons.bluetooth,
+                            //       color: color,
+                            //       size: 48,
+                            //     );
+                            //   },
+                            // ),
+                            ElevatedButton(
+                              onPressed: () {
+                                _startDiscovery();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey.shade100,
+                                minimumSize: const Size(100, 40),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(22),
+                                ),
+                              ),
+                              child: Text(
+                                'Scan',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: MediaQuery.of(context).size.width / 2.5,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(22),
+                                color: Colors.grey.shade100,
+                              ),
+                              child: Center(
+                                child: DropdownButton<ScanResult>(
+                                  value: selectedDevice,
+                                  underline: const SizedBox(),
+                                  icon: Icon(
+                                    Icons.arrow_forward_ios,
+                                    color: Colors.grey.shade600,
+                                    size: 16,
+                                  ),
+                                  onChanged: (ScanResult? newValue) {
+                                    setState(() {
+                                      selectedDevice = newValue;
+                                    });
+                                  },
+                                  items: filteredDevices
+                                      .map<DropdownMenuItem<ScanResult>>(
+                                          (ScanResult device) {
+                                    return DropdownMenuItem<ScanResult>(
+                                      value: device,
+                                      child: Text(device.device.name),
+                                    );
+                                  }).toList(),
+                                  hint: Text(
+                                    'Select a device',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        // ElevatedButton(
+                        //   child: const Text(
+                        //     'Connect',
+                        //     style: TextStyle(fontSize: 16),
+                        //   ),
+                        //   onPressed: () {
+                        //     _connectToDevice(selectedDevice!.device);
+                        //   },
+                        // ),
+                      ],
                     ),
                   ),
                 ),
-                SizedBox(width: 8.0),
-                ElevatedButton(
-                  onPressed: _sendMessage,
-                  child: Text('Send Data'),
+              ),
+              Container(
+                margin: const EdgeInsets.only(
+                  left: 22,
+                  right: 22,
                 ),
-                SizedBox(width: 8.0),
-                ElevatedButton(
-                  onPressed: _receiveMessage,
-                  child: Text('Receive Data'),
+                child: Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      width: MediaQuery.of(context).size.width,
+                      height: MediaQuery.of(context).size.height / 9,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        color: const Color.fromRGBO(57, 210, 192, 1),
+                      ),
+                      child: Row(children: [
+                        const SizedBox(width: 20),
+                        const Icon(
+                          Icons.bluetooth_connected,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                        const SizedBox(
+                          width: 10,
+                        ),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Connected Device',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              connected_device ?? '',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ]),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      child: Container(
+                        width: MediaQuery.of(context).size.width,
+                        height: MediaQuery.of(context).size.height / 9,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          color: const Color.fromRGBO(75, 57, 239, 1),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                _sendMessage("U402");
+                              },
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.chrome_reader_mode_rounded,
+                                    color: Colors.white,
+                                    size: 25,
+                                  ),
+                                  SizedBox(height: 10),
+                                  Text(
+                                    'Read Batch Code',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                _sendMessage("U403");
+                              },
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.edit,
+                                    color: Colors.white,
+                                    size: 25,
+                                  ),
+                                  SizedBox(height: 10),
+                                  Text(
+                                    'Set Batch Code',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      child: Container(
+                        width: MediaQuery.of(context).size.width,
+                        height: MediaQuery.of(context).size.height / 9,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          color: const Color.fromRGBO(251, 175, 124, 1),
+                        ),
+                        child: Row(children: [
+                          const SizedBox(width: 20),
+                          const Icon(
+                            Icons.contact_mail_rounded,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                          const SizedBox(
+                            width: 15,
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              _sendMessage("U401");
+                            },
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Start Test',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
