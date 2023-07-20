@@ -167,30 +167,43 @@ class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 22, top: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(radius: 28),
-                    SizedBox(height: 14),
-                    Text(
-                      'Greetings Of The Day',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 26,
+              Padding(
+                padding: EdgeInsets.only(left: 22, right: 22, top: 7),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height / 7,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    color: Colors.blue.shade100,
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Greetings Of The Day',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 24,
+                            ),
+                          ),
+                          Text(
+                            'Pawan 👋',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color.fromRGBO(76, 58, 239, 1),
+                              fontSize: 24,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'Pawan 👋',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color.fromRGBO(76, 58, 239, 1),
-                        fontSize: 26,
-                      ),
-                    ),
-                  ],
+                      CircleAvatar(radius: 24),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -198,7 +211,8 @@ class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
               CarouselSlider(
                 items: [
                   Container(
-                    margin: const EdgeInsets.all(6.0),
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(15),
                       image: const DecorationImage(
@@ -208,7 +222,8 @@ class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   Container(
-                    margin: const EdgeInsets.all(6.0),
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(15),
                       image: const DecorationImage(
@@ -218,7 +233,8 @@ class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   Container(
-                    margin: const EdgeInsets.all(6.0),
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(15),
                       image: const DecorationImage(
@@ -228,7 +244,8 @@ class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   Container(
-                    margin: const EdgeInsets.all(6.0),
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(15),
                       image: const DecorationImage(
@@ -239,13 +256,13 @@ class _MyAppState extends State<MyApp> with SingleTickerProviderStateMixin {
                   ),
                 ],
                 options: CarouselOptions(
-                  height: 150,
+                  height: MediaQuery.of(context).size.height / 5,
                   autoPlay: true,
+                  viewportFraction: 0.9,
                   autoPlayInterval: const Duration(seconds: 3),
                   autoPlayAnimationDuration: const Duration(milliseconds: 900),
                   autoPlayCurve: Curves.fastOutSlowIn,
                   pauseAutoPlayOnTouch: true,
-                  aspectRatio: 2.0,
                   onPageChanged: (index, reason) {
                     setState(() {});
                   },
